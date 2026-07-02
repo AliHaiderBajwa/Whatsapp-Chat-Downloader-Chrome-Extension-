@@ -18,6 +18,17 @@
       <span id="chatName" class="chat-bar-name"></span>
     </div>
 
+    <div id="chatListContainer" class="chat-list-container hidden">
+      <div class="chat-list-header">
+        <span class="chat-list-title">Select chats to backup</span>
+        <div class="chat-list-actions">
+          <button id="selectAllBtn" class="chat-list-action-btn">Select All</button>
+        </div>
+      </div>
+      <div id="chatList" class="chat-list"></div>
+      <div id="chatListCount" class="chat-list-count">0 chats selected</div>
+    </div>
+
     <div id="status" class="status-card status-connecting">
       <span id="statusIcon" class="status-card-icon" aria-hidden="true">&#128259;</span>
       <p id="statusText" class="status-card-text">Connecting to WhatsApp Web...</p>
@@ -72,6 +83,9 @@
       <div class="progress-info">
         <span id="progressText">Starting...</span>
       </div>
+      <div id="batchProgressInfo" class="batch-progress-info hidden">
+        <span id="batchProgressText"></span>
+      </div>
     </div>
 
     <div id="filterContainer" class="filter-container hidden">
@@ -95,6 +109,13 @@
         <span class="preview-title">Preview (<span id="previewCount">0</span> messages)</span>
       </div>
       <div id="previewList" class="preview-list"></div>
+    </div>
+
+    <div id="batchResultsContainer" class="batch-results hidden">
+      <div class="batch-results-header">
+        <span class="batch-results-title">Batch Results</span>
+      </div>
+      <div id="batchResultsList" class="batch-results-list"></div>
     </div>
 
     <footer class="footer">

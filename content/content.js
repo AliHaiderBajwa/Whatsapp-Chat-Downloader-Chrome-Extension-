@@ -132,6 +132,8 @@ function extractChatList() {
 
     const isGroup = !!row.querySelector(SELECTORS.groupIcon);
 
+    const chatId = extractChatIdFromRow(row);
+
     const id = (
       row.getAttribute('data-testid') ||
       row.getAttribute('aria-label') ||
@@ -148,6 +150,7 @@ function extractChatList() {
 
     chats.push({
       id,
+      chatId,
       name,
       lastMessage,
       timestamp,
@@ -728,6 +731,111 @@ function showNotification(text, type = 'info') {
   }, 4000);
 }
 
+function normalizeName(str) {
+  if (!str) return '';
+  return str.trim().replace(/\s+/g, ' ').normalize('NFKC').toLowerCase();
+}
+
+function findClickableElement(row) {
+  try {
+    const rect = row.getBoundingClientRect();
+    const at = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    if (at && row.contains(at)) return at;
+  } catch {}
+  for (const sel of ['[data-testid^="cell-frame"]', '[data-testid^="conversation-info"]', '[role="button"]', '[tabindex="0"]']) {
+    const el = row.querySelector(sel);
+    if (el) return el;
+  }
+  return row;
+}
+
+function extractChatIdFromRow(row) {
+  for (const el of row.querySelectorAll('[data-testid]')) {
+    const t = el.getAttribute('data-testid');
+    if (t && (t.includes('@c.us') || t.includes('@g.us'))) {
+      const m = t.match(/[\w.-]+@[cg]\.us/);
+      if (m) return m[0];
+    }
+  }
+  for (const el of row.querySelectorAll('[data-id]')) {
+    const id = el.getAttribute('data-id');
+    if (id && (id.includes('@c.us') || id.includes('@g.us'))) return id;
+  }
+  return null;
+}
+
+function dispatchClickSequence(el) {
+  const r = el.getBoundingClientRect();
+  const x = r.left + r.width / 2, y = r.top + r.height / 2;
+  const mk = (type, extra) => {
+    const o = { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y, button: 0, ...extra };
+    return type.startsWith('pointer') ? new PointerEvent(type, o) : new MouseEvent(type, o);
+  };
+  el.dispatchEvent(mk('pointerdown', { pointerId: 1, pointerType: 'mouse', isPrimary: true }));
+  el.dispatchEvent(mk('mousedown'));
+  el.dispatchEvent(mk('pointerup', { pointerId: 1, pointerType: 'mouse', isPrimary: true }));
+  el.dispatchEvent(mk('mouseup'));
+  el.dispatchEvent(mk('click'));
+}
+async function openChat(chatName) {
+  const normalizedTarget = normalizeName(chatName);
+
+  const alreadyOpenName = getChatName();
+  if (alreadyOpenName && normalizeName(alreadyOpenName) === normalizedTarget) {
+    return { success: true, chatName, alreadyOpen: true };
+  }
+
+  const pane = query(SELECTORS.chatListContainer) || query(SELECTORS.chatListFallback);
+  if (!pane) return { success: false, error: 'Cannot find chat list pane' };
+
+  const rows = queryAll(`${SELECTORS.chatListContainer} ${SELECTORS.chatRow}`).filter(el => el.getAttribute('role') === 'row');
+  const allRows = rows.length ? rows : Array.from(queryAll(SELECTORS.chatListFallback)).flatMap(list => Array.from(list.querySelectorAll(SELECTORS.chatRowFallback)));
+
+  let targetRow = null;
+  for (const row of allRows) {
+    const name = (row.querySelector(SELECTORS.chatName)?.textContent?.trim() || row.querySelector(SELECTORS.chatNameFallback)?.getAttribute('title')?.trim() || row.getAttribute('aria-label')?.trim() || '');
+    if (name && normalizeName(name) === normalizedTarget) { targetRow = row; break; }
+    if (name && !targetRow && (normalizeName(name).includes(normalizedTarget) || normalizedTarget.includes(normalizeName(name)))) { targetRow = row; }
+  }
+
+  if (!targetRow) return { success: false, error: `Chat "${chatName}" not found in the sidebar` };
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    targetRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    await delay(200);
+
+    const clickable = findClickableElement(targetRow);
+    dispatchClickSequence(clickable);
+
+    await delay(1500);
+
+    const headerAfter = getChatName();
+    const anyMessages = queryAll('div.message-in, div.message-out, div[data-id]');
+
+    if (headerAfter || anyMessages.length > 0) {
+      return { success: true, chatName: headerAfter || chatName };
+    }
+
+    if (attempt < 2) await delay(1500);
+  }
+
+  const chatId = extractChatIdFromRow(targetRow);
+  if (chatId) {
+    const prefix = chatId.includes('@g.us') ? '#g=' : '#p=';
+    window.location.hash = prefix + encodeURIComponent(chatId);
+    await delay(2500);
+    const h = getChatName();
+    if (h) return { success: true, chatName: h };
+
+    window.location.hash = '#p=' + encodeURIComponent(chatId);
+    await delay(2000);
+    const h2 = getChatName();
+    if (h2) return { success: true, chatName: h2 };
+  }
+
+  return { success: false, error: `Timeout waiting for chat "${chatName}" to open` };
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   const sendSafe = (response) => {
     try { sendResponse(response); } catch {}
@@ -748,14 +856,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     case 'scrape-deep': {
-      const chatName = getChatName();
-      if (!chatName) {
-        sendSafe({ success: false, error: 'No chat is open. Open a chat first.' });
-        break;
-      }
-      scrapeAllMessages(chatName).then((result) => {
+      // Retry getting chat name a few times to handle DOM transition lag
+      (async () => {
+        let chatName = getChatName();
+        for (let retry = 0; retry < 10 && !chatName; retry++) {
+          await delay(500);
+          chatName = getChatName();
+        }
+        if (!chatName) {
+          sendSafe({ success: false, error: 'No chat is open. Open a chat first.' });
+          return;
+        }
+        const result = await scrapeAllMessages(chatName);
         try { sendResponse(result); } catch {}
-      });
+      })();
       return true;
     }
 
@@ -772,6 +886,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendSafe({ success: false, error: err.message });
       }
       break;
+    }
+
+    case 'open-chat': {
+      const name = request.chatName;
+      if (!name) {
+        sendSafe({ success: false, error: 'No chat name provided' });
+        break;
+      }
+      openChat(name).then((result) => {
+        try { sendResponse(result); } catch {}
+      });
+      return true;
     }
 
     default:

@@ -9,6 +9,12 @@ let activeTabId = null;
 let lastScrapeData = null;
 let lastPreviewMessages = [];
 
+// Batch backup state
+let batchQueue = [];
+let batchCurrentIndex = 0;
+let batchFormat = 'json';
+let batchResults = [];
+
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
     chrome.storage.local.set({ [STORAGE_KEY]: [] });
@@ -42,7 +48,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       break;
 
     case 'save-backup':
-      handleSaveBackup(message.data, message.format || 'json')
+      handleSaveBackup(message.data, message.format || 'json', false)
         .then((r) => sendResponse(r))
         .catch((e) => sendResponse({ success: false, error: e.message }));
       break;
@@ -55,6 +61,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case 'cancel-backup':
       handleCancel(activeSessionId, 'Cancelled by user')
+        .then((r) => sendResponse(r))
+        .catch((e) => sendResponse({ success: false, error: e.message }));
+      break;
+
+    case 'cancel-batch-backup':
+      handleCancelBatch()
         .then((r) => sendResponse(r))
         .catch((e) => sendResponse({ success: false, error: e.message }));
       break;
@@ -81,6 +93,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse(lastPreviewMessages || []);
       break;
 
+    case 'start-batch-backup':
+      handleStartBatchBackup(message.chats || [], message.format || 'json', sender.tab?.id)
+        .then((r) => sendResponse(r))
+        .catch((e) => sendResponse({ success: false, error: e.message }));
+      break;
+
     default:
       sendResponse({ success: false, error: `Unknown action: ${message.action}` });
   }
@@ -95,7 +113,10 @@ async function getStatus() {
   return {
     active: activeSessionId !== null,
     sessionId: activeSessionId,
-    latestSession: latest
+    latestSession: latest,
+    batchActive: batchQueue.length > 0,
+    batchCurrent: batchCurrentIndex,
+    batchTotal: batchQueue.length
   };
 }
 
@@ -202,6 +223,232 @@ async function handleStartBackup(format, tabId) {
   }
 }
 
+/**
+ * Starts a batch backup of multiple chats sequentially.
+ * For each chat: open → scrape-deep → save (auto-download) → report progress.
+ * Stops on first failure.
+ */
+async function handleStartBatchBackup(chats, format, tabId) {
+  if (activeSessionId) {
+    return { success: false, error: 'A backup is already in progress' };
+  }
+
+  if (!chats || chats.length === 0) {
+    return { success: false, error: 'No chats selected for backup' };
+  }
+
+  if (!tabId) {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab || !tab.url || !tab.url.includes('web.whatsapp.com')) {
+      return { success: false, error: 'Open WhatsApp Web first' };
+    }
+    tabId = tab.id;
+  }
+
+  activeTabId = tabId;
+  batchQueue = [...chats];
+  batchCurrentIndex = 0;
+  batchFormat = format;
+  batchResults = [];
+
+  const sessionId = crypto.randomUUID();
+  activeSessionId = sessionId;
+
+  await saveSession({
+    id: sessionId,
+    chatName: batchQueue.join(', '),
+    format,
+    status: 'in-progress',
+    messageCount: 0,
+    startedAt: new Date().toISOString(),
+    completedAt: null,
+    filename: null
+  });
+
+  try {
+    for (let i = 0; i < batchQueue.length; i++) {
+      batchCurrentIndex = i;
+      const chatName = batchQueue[i];
+
+      // Send batch progress to popup
+      sendBatchProgress(i, chatName, 'opening');
+
+      // Step 1: Open the chat (with retry)
+      let openResult = null;
+      for (let openAttempt = 0; openAttempt < 3; openAttempt++) {
+        openResult = await chrome.tabs.sendMessage(tabId, {
+          action: 'open-chat',
+          chatName
+        });
+
+        if (openResult && openResult.success) break;
+
+        if (openAttempt < 2) {
+          await delay(1000);
+        }
+      }
+
+      if (!openResult || !openResult.success) {
+        throw new Error(openResult?.error || `Failed to open chat "${chatName}"`);
+      }
+
+      // Wait for DOM to fully settle after opening
+      await delay(800);
+
+      // Step 2: Scrape the chat (with retry for DOM transition issues)
+      sendBatchProgress(i, chatName, 'scraping');
+
+      let scrapeResult = null;
+      for (let scrapeAttempt = 0; scrapeAttempt < 3; scrapeAttempt++) {
+        scrapeResult = await chrome.tabs.sendMessage(tabId, {
+          action: 'scrape-deep'
+        });
+
+        if (scrapeResult && scrapeResult.success) break;
+
+        // If it failed because chat wasn't ready, retry opening + scraping
+        if (scrapeAttempt < 2) {
+          await delay(1000);
+          // Re-open the chat to reset DOM state
+          try {
+            await chrome.tabs.sendMessage(tabId, { action: 'open-chat', chatName });
+          } catch {}
+          await delay(800);
+        }
+      }
+
+      if (!scrapeResult || !scrapeResult.success) {
+        throw new Error(scrapeResult?.error || `Failed to scrape chat "${chatName}"`);
+      }
+
+      // Step 3: Save the backup (auto-download, no saveAs dialog)
+      const data = {
+        chatName: scrapeResult.chatName,
+        exportedAt: new Date().toISOString(),
+        messageCount: scrapeResult.messageCount,
+        messages: scrapeResult.messages,
+        participantCount: scrapeResult.participantCount
+      };
+
+      const saveResult = await handleSaveBackup(data, format, false);
+
+      if (!saveResult || !saveResult.success) {
+        throw new Error(saveResult?.error || `Failed to save backup for "${chatName}"`);
+      }
+
+      batchResults.push({
+        chatName,
+        messageCount: scrapeResult.messageCount,
+        filename: saveResult.filename,
+        success: true
+      });
+
+      sendBatchProgress(i, chatName, 'done', scrapeResult.messageCount);
+    }
+
+    // Batch complete
+    await updateSession(sessionId, {
+      status: 'completed',
+      messageCount: batchResults.length,
+      completedAt: new Date().toISOString()
+    });
+
+    await cleanOldSessions();
+
+    const result = {
+      success: true,
+      sessionId,
+      batchResults,
+      totalChats: batchQueue.length
+    };
+
+    batchQueue = [];
+    batchCurrentIndex = 0;
+    activeSessionId = null;
+    activeTabId = null;
+
+    return result;
+  } catch (err) {
+    await updateSession(sessionId, {
+      status: 'failed',
+      completedAt: new Date().toISOString()
+    });
+
+    // Report which chat failed
+    const failedResult = {
+      success: false,
+      error: err.message,
+      batchResults,
+      failedAtIndex: batchCurrentIndex,
+      failedChat: batchQueue[batchCurrentIndex] || 'unknown',
+      totalChats: batchQueue.length
+    };
+
+    // Send final failed progress
+    try {
+      chrome.runtime.sendMessage({
+        action: 'batch-progress',
+        current: batchCurrentIndex,
+        total: batchQueue.length,
+        status: 'failed',
+        chatName: batchQueue[batchCurrentIndex] || '',
+        error: err.message
+      }).catch(() => {});
+    } catch {}
+
+    batchQueue = [];
+    batchCurrentIndex = 0;
+    activeSessionId = null;
+    activeTabId = null;
+
+    return failedResult;
+  }
+}
+
+function sendBatchProgress(index, chatName, status, messageCount) {
+  try {
+    chrome.runtime.sendMessage({
+      action: 'batch-progress',
+      current: index,
+      total: batchQueue.length,
+      chatName,
+      status,
+      messageCount
+    }).catch(() => {});
+  } catch {}
+}
+
+function delay(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+async function handleCancelBatch() {
+  // Cancel current scrape in content script
+  if (activeTabId) {
+    try {
+      await chrome.tabs.sendMessage(activeTabId, { action: 'cancel-scrape' });
+    } catch {}
+  }
+
+  // Clear batch state
+  batchQueue = [];
+  batchCurrentIndex = 0;
+  batchResults = [];
+
+  if (activeSessionId) {
+    await updateSession(activeSessionId, {
+      status: 'cancelled',
+      completedAt: new Date().toISOString()
+    });
+  }
+
+  chrome.alarms.clear('scrape-timeout');
+  activeSessionId = null;
+  activeTabId = null;
+
+  return { success: true, reason: 'Batch cancelled by user' };
+}
+
 async function handleFilteredDownload(format, filters) {
   if (!lastScrapeData) {
     return { success: false, error: 'No scraped data available. Start a backup first.' };
@@ -240,7 +487,7 @@ async function handleFilteredDownload(format, filters) {
     messageCount: messages.length
   };
 
-  const downloadResult = await handleSaveBackup(data, format);
+  const downloadResult = await handleSaveBackup(data, format, true);
   return downloadResult;
 }
 
@@ -316,7 +563,10 @@ function cleanOldSessions() {
   });
 }
 
-async function handleSaveBackup(data, format) {
+/**
+ * @param {boolean} showSaveAs - Whether to show the "Save As" dialog. False for batch auto-download.
+ */
+async function handleSaveBackup(data, format, showSaveAs = true) {
   let content, filename, mimeType;
 
   switch (format) {
@@ -344,7 +594,7 @@ async function handleSaveBackup(data, format) {
     const downloadId = await chrome.downloads.download({
       url: dataUri,
       filename: `WhatsApp-Backups/${filename}`,
-      saveAs: true,
+      saveAs: showSaveAs,
       conflictAction: 'uniquify'
     });
 
@@ -464,7 +714,7 @@ function exportHTML(data) {
     displayText = displayText.replace(strike, '<s>$1</s>');
     const code = /`([^`]+)`/g;
     displayText = displayText.replace(code, '<code>$1</code>');
-    const quote = /^&gt;\s?(.+)/gm;
+    const quote = /^>\s?(.+)/gm;
     displayText = displayText.replace(quote, '<blockquote>$1</blockquote>');
 
     const badges = [];
@@ -583,8 +833,13 @@ function generateFilename(chatName, exportDate, ext) {
 
 function esc(str) {
   if (typeof str !== 'string') return '';
-  const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
-  return str.replace(/[&<>"']/g, ch => map[ch]);
+  const map = {};
+  map['&'.charCodeAt(0)] = '&#38;';
+  map['<'.charCodeAt(0)] = '&#60;';
+  map['>'.charCodeAt(0)] = '&#62;';
+  map['"'.charCodeAt(0)] = '&#34;';
+  map["'".charCodeAt(0)] = '&#39;';
+  return str.replace(/[&<>"']/g, function(ch) { return map[ch.charCodeAt(0)]; });
 }
 
 function sanitize(name) {
