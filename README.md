@@ -1,14 +1,14 @@
 <div align="center">
 
 # 💬 WhatsApp Chat Backup
-### Chrome Extension — Export WhatsApp Web Chats to JSON, TXT, or HTML
+### Chrome Extension - Export WhatsApp Web Chats to JSON, TXT, or HTML
 
 ![Chrome MV3](https://img.shields.io/badge/Manifest-V3-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)
 ![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
 ![HTML/CSS](https://img.shields.io/badge/HTML-CSS-1572B6?style=for-the-badge&logo=html5&logoColor=white)
 ![Status](https://img.shields.io/badge/Status-Complete-brightgreen?style=for-the-badge)
 
-*Scrapes the active WhatsApp Web chat via DOM parsing, auto-loads older messages through smart scrolling, and downloads the full conversation in your choice of format — all client-side, no servers involved.*
+*Scrapes the active WhatsApp Web chat via DOM parsing, auto-loads older messages through smart scrolling, and downloads the full conversation in your choice of format - all client-side, no servers involved.*
 
 </div>
 
@@ -18,25 +18,25 @@
 
 WhatsApp Chat Backup is a **Manifest V3 Chrome extension** that extracts message history from [web.whatsapp.com](https://web.whatsapp.com/) by parsing the live DOM. It navigates through chat messages, detects senders, timestamps, media attachments, and text formatting, then packages everything into a downloadable file.
 
-The extension operates entirely in the browser — no data is sent to any external server. Every export is generated locally via the service worker and saved through the Chrome Downloads API.
+The extension operates entirely in the browser - no data is sent to any external server. Every export is generated locally via the service worker and saved through the Chrome Downloads API.
 
 ---
 
 ## ✨ Features
 
-- **Deep-scroll scraping** — Automatically scrolls up the chat to load older messages (up to 10,000), with deduplication and stall detection
-- **3 export formats** — JSON (structured data / analysis), TXT (readable plain text), HTML (WhatsApp-dark-themed, responsive, with light mode & print CSS)
-- **Filter before export** — Search by keyword, filter by date range (24h / 7d / 30d), or show media-only messages
-- **Message preview** — See the first 10 scraped messages in the popup before downloading
-- **Floating backup button** — A persistent "Backup Chat" FAB injected on WhatsApp Web for one-click access
-- **Media metadata** — Detects images, videos, audio, documents, stickers, and GIFs with filename, size, duration, and MIME type
-- **Formatting preservation** — Bold (`*text*`), italic (`_text_`), strikethrough (`~text~`), inline code, and blockquotes are parsed and rendered in exports
-- **RTL language support** — Automatic text direction detection for Arabic, Hebrew, Urdu, and other RTL scripts
-- **Progress reporting** — Live message count during deep-scrape with a shimmer-animated progress bar
-- **Cancellation & timeout** — Cancel in-progress backups or let the 2-minute timeout handle stalls
-- **Session history** — Stores the last 5 backup sessions with status, chat name, and timestamp
-- **Persistent preferences** — Remembers your last-used export format across sessions
-- **No backend required** — Everything runs inside the browser; zero external dependencies
+- **Deep-scroll scraping** - Automatically scrolls up the chat to load older messages (up to 10,000), with deduplication and stall detection
+- **3 export formats** - JSON (structured data / analysis), TXT (readable plain text), HTML (WhatsApp-dark-themed, responsive, with light mode & print CSS)
+- **Filter before export** - Search by keyword, filter by date range (24h / 7d / 30d), or show media-only messages
+- **Message preview** - See the first 10 scraped messages in the popup before downloading
+- **Floating backup button** - A persistent "Backup Chat" FAB injected on WhatsApp Web for one-click access
+- **Media metadata** - Detects images, videos, audio, documents, stickers, and GIFs with filename, size, duration, and MIME type
+- **Formatting preservation** - Bold (`*text*`), italic (`_text_`), strikethrough (`~text~`), inline code, and blockquotes are parsed and rendered in exports
+- **RTL language support** - Automatic text direction detection for Arabic, Hebrew, Urdu, and other RTL scripts
+- **Progress reporting** - Live message count during deep-scrape with a shimmer-animated progress bar
+- **Cancellation & timeout** - Cancel in-progress backups or let the 2-minute timeout handle stalls
+- **Session history** - Stores the last 5 backup sessions with status, chat name, and timestamp
+- **Persistent preferences** - Remembers your last-used export format across sessions
+- **No backend required** - Everything runs inside the browser; zero external dependencies
 
 ---
 
@@ -82,7 +82,7 @@ whatsapp-chat-backup/
 2. Enable **Developer mode** (toggle in the top-right corner)
 3. Click **Load unpacked**
 4. Browse to and select the project root folder
-5. The extension icon appears in the toolbar — pin it for easy access
+5. The extension icon appears in the toolbar - pin it for easy access
 
 ---
 
