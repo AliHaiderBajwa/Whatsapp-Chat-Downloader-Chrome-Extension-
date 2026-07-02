@@ -1,0 +1,117 @@
+.wcb-float-btn {
+  position: fixed;
+  bottom: 24px;
+  inset-inline-end: 24px;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 28px;
+  background: #075e54;
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(7, 94, 84, 0.4);
+  opacity: 0;
+  transform: translateY(16px) scale(0.9);
+  transition: opacity 0.3s ease, transform 0.3s ease, background 0.2s, box-shadow 0.2s;
+  pointer-events: none;
+  user-select: none;
+}
+
+.wcb-float-btn--visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.wcb-float-btn:hover {
+  background: #054d44;
+  box-shadow: 0 6px 24px rgba(7, 94, 84, 0.5);
+}
+
+.wcb-float-btn:active {
+  transform: scale(0.97);
+}
+
+.wcb-float-btn:disabled,
+.wcb-float-btn--loading {
+  opacity: 0.7;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.wcb-float-btn--loading .wcb-float-icon {
+  animation: wcb-spin 1s linear infinite;
+}
+
+@keyframes wcb-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.wcb-float-icon {
+  font-size: 18px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.wcb-float-label {
+  white-space: nowrap;
+}
+
+.wcb-toast {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 99999;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  transform: translateX(32px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: none;
+  max-width: 360px;
+  word-wrap: break-word;
+}
+
+.wcb-toast--visible {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.wcb-toast--info {
+  background: #1f2a30;
+  color: #53bdeb;
+  border-left: 4px solid #53bdeb;
+}
+
+.wcb-toast--success {
+  background: #0b3321;
+  color: #25d366;
+  border-left: 4px solid #25d366;
+}
+
+.wcb-toast--error {
+  background: #2d1215;
+  color: #ef5350;
+  border-left: 4px solid #ef5350;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wcb-float-btn,
+  .wcb-toast {
+    transition: none;
+  }
+}

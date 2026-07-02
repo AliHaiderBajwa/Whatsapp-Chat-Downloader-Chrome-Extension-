@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="popup.css" />
+  <title>WhatsApp Chat Backup</title>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <span class="header-icon" aria-hidden="true">&#11015;</span>
+      <h1>WhatsApp Chat Backup</h1>
+    </header>
+
+    <div id="chatBar" class="chat-bar hidden">
+      <span class="chat-bar-icon" aria-hidden="true">&#128172;</span>
+      <span id="chatName" class="chat-bar-name"></span>
+    </div>
+
+    <div id="status" class="status-card status-connecting">
+      <span id="statusIcon" class="status-card-icon" aria-hidden="true">&#128259;</span>
+      <p id="statusText" class="status-card-text">Connecting to WhatsApp Web...</p>
+    </div>
+
+    <div class="format-group" role="radiogroup" aria-label="Export format">
+      <label class="format-option">
+        <input type="radio" name="format" value="json" checked />
+        <span class="format-emoji" aria-hidden="true">&#128202;</span>
+        <span class="format-meta">
+          <span class="format-name">JSON</span>
+          <span class="format-desc">Best for data analysis</span>
+        </span>
+      </label>
+      <label class="format-option">
+        <input type="radio" name="format" value="txt" />
+        <span class="format-emoji" aria-hidden="true">&#128196;</span>
+        <span class="format-meta">
+          <span class="format-name">Plain Text</span>
+          <span class="format-desc">Best for reading</span>
+        </span>
+      </label>
+      <label class="format-option">
+        <input type="radio" name="format" value="html" />
+        <span class="format-emoji" aria-hidden="true">&#127760;</span>
+        <span class="format-meta">
+          <span class="format-name">HTML</span>
+          <span class="format-desc">Best for viewing in browser</span>
+        </span>
+      </label>
+    </div>
+
+    <div id="countEstimate" class="count-estimate hidden">
+      <span class="count-label">Estimated: <strong id="msgCount">0</strong> messages</span>
+    </div>
+
+    <div class="actions">
+      <button id="backupBtn" class="btn btn-primary" disabled>
+        <span class="btn-icon" aria-hidden="true">&#11015;&#65039;</span>
+        <span class="btn-text">Start Backup</span>
+      </button>
+      <button id="cancelBtn" class="btn btn-secondary hidden">
+        <span class="btn-icon" aria-hidden="true">&#10005;</span>
+        <span class="btn-text">Cancel</span>
+      </button>
+    </div>
+
+    <div id="progressContainer" class="progress-container hidden">
+      <div class="progress-bar">
+        <div id="progressFill" class="progress-fill" style="width: 0%"></div>
+      </div>
+      <div class="progress-info">
+        <span id="progressText">Starting...</span>
+      </div>
+    </div>
+
+    <div id="filterContainer" class="filter-container hidden">
+      <input type="text" id="searchInput" class="search-input" placeholder="Search messages..." />
+      <div class="filter-row">
+        <select id="dateFilter" class="date-filter">
+          <option value="all">All time</option>
+          <option value="24h">Last 24 hours</option>
+          <option value="7d">Last 7 days</option>
+          <option value="30d">Last 30 days</option>
+        </select>
+        <label class="filter-checkbox">
+          <input type="checkbox" id="mediaOnly" />
+          <span>Media only</span>
+        </label>
+      </div>
+    </div>
+
+    <div id="previewContainer" class="preview-container hidden">
+      <div class="preview-header">
+        <span class="preview-title">Preview (<span id="previewCount">0</span> messages)</span>
+      </div>
+      <div id="previewList" class="preview-list"></div>
+    </div>
+
+    <footer class="footer">
+      <p id="footerText">Scroll up in the chat to load older messages before backing up.</p>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
